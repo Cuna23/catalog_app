@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 //import 'package:provider/provider.dart';
-import '../../view model/product_vm.dart';
+import '../view model/product_vm.dart';
 // import 'widget/search_bar_widget.dart';
 // import 'widget/filter_chip_bar.dart';
 // import 'widget/product_grid.dart';
