@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-//import 'package:provider/provider.dart';
+import 'package:provider/provider.dart'; 
 import '../view model/product_vm.dart';
-// import 'widget/search_bar_widget.dart';
-// import 'widget/filter_chip_bar.dart';
-// import 'widget/product_grid.dart';
-// import 'widget/loading_state_widget.dart';
-// import 'widget/error_state_widget.dart';
-// import 'widget/empty_state_widget.dart';
+import 'widget/Filter.dart';
+import 'widget/proGrid.dart';
+import 'widget/searchBar.dart';
+import 'widget/state.dart';
+
 
 class ProductView extends StatefulWidget {
   const ProductView({super.key});

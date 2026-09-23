@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../common/utils/debouncer.dart';
+import 'debouncer.dart';
 
 class SearchBarWidget extends StatefulWidget {
   final ValueChanged<String> onChanged;
