@@ -1,38 +1,64 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' hide Category;
 import '../model/product_model.dart';
 import '../services/product_services.dart';
 
 class ProductListViewModel extends ChangeNotifier {
   final ProductService _service = ProductService();
 
-  static const int _pageSize = 20;
+  static const int pageSize = 20;
 
   List<Product> products = [];
-  List<String> categories = ['All'];
-  String selectedCategory = 'All';
+  List<Category> categories = [];
+
+  /// null = no category filter applied (showing the general product list)
+  String? selectedCategorySlug;
+
   String searchQuery = '';
 
-  bool isLoading = false;     // true only for the very first load
-  bool isLoadingMore = false; // true while fetching the next page
+  bool isLoading = false;
   String? error;
 
-  int _skip = 0;
-  int _total = 0;
+  int currentPage = 1; // 1-based, for display ("Page 1 of 10")
+  int total = 0;
 
-  bool get _hasMore => products.length < _total;
+  int get _skip => (currentPage - 1) * pageSize;
 
-  /// Initial fetch — called once when the screen first opens.
+  int get totalPages => total == 0 ? 1 : (total / pageSize).ceil();
+  bool get hasNextPage => currentPage < totalPages;
+  bool get hasPreviousPage => currentPage > 1;
+
+  /// e.g. "1-20 of 194"
+  String get rangeLabel {
+    if (total == 0) return '0 of 0';
+    final start = _skip + 1;
+    final end = (_skip + products.length).clamp(0, total);
+    return '$start-$end of $total';
+  }
+
+  Future<void> init() async {
+    await fetchCategories();
+    await fetchProducts();
+  }
+
+  Future<void> fetchCategories() async {
+    try {
+      categories = await _service.getCategories();
+      notifyListeners();
+    } catch (e) {
+      // Non-fatal — filter list just stays empty if this fails.
+    }
+  }
+
+  /// Loads the current page for the general (unfiltered) list.
   Future<void> fetchProducts() async {
     isLoading = true;
     error = null;
-    _skip = 0;
     notifyListeners();
 
     try {
-      final result = await _service.getProducts(limit: _pageSize, skip: _skip);
+      final result = await _service.getProducts(limit: pageSize, skip: _skip);
       products = result.products;
-      _total = result.total;
-      _skip = result.skip + result.products.length;
+      total = result.total;
       error = null;
     } catch (e) {
       error = 'Failed to load products. Please check your connection.';
@@ -42,33 +68,58 @@ class ProductListViewModel extends ChangeNotifier {
     }
   }
 
-  /// Called when the user scrolls near the bottom of the list.
-  Future<void> loadMore() async {
-    if (isLoadingMore || isLoading || !_hasMore) return;
+  /// Loads the current page for the selected category.
+  Future<void> fetchByCategory() async {
+    final slug = selectedCategorySlug;
+    if (slug == null) return;
 
-    isLoadingMore = true;
+    isLoading = true;
+    error = null;
     notifyListeners();
 
     try {
-      final result = await _service.getProducts(limit: _pageSize, skip: _skip);
-      products = [...products, ...result.products];
-      _total = result.total;
-      _skip = result.skip + result.products.length;
+      final result = await _service.getProductsByCategory(slug, limit: pageSize, skip: _skip);
+      products = result.products;
+      total = result.total;
+      error = null;
     } catch (e) {
-      // Keep existing products visible; just stop the "loading more" spinner.
-      // A snackbar could be shown here instead of a full error state.
+      error = 'Failed to load this category. Please try again.';
     } finally {
-      isLoadingMore = false;
+      isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Called by the retry button in the error state.
-  Future<void> retry() => fetchProducts();
+  Future<void> _reload() {
+    return selectedCategorySlug == null ? fetchProducts() : fetchByCategory();
+  }
 
-  /// Called (after debounce) whenever the search text changes.
+  Future<void> retry() => _reload();
+
+  Future<void> nextPage() async {
+    if (!hasNextPage) return;
+    currentPage++;
+    await _reload();
+  }
+
+  Future<void> previousPage() async {
+    if (!hasPreviousPage) return;
+    currentPage--;
+    await _reload();
+  }
+
+  /// Called when the user picks a category from the filter sheet.
+  Future<void> onCategorySelected(String slug) async {
+    selectedCategorySlug = slug;
+    currentPage = 1;
+    searchQuery = '';
+    await fetchByCategory();
+  }
+
   Future<void> onSearchChanged(String query) async {
     searchQuery = query;
+    selectedCategorySlug = null;
+    currentPage = 1;
 
     if (query.isEmpty) {
       await fetchProducts();
@@ -82,8 +133,7 @@ class ProductListViewModel extends ChangeNotifier {
     try {
       final result = await _service.searchProducts(query);
       products = result.products;
-      _total = result.total;
-      _skip = result.products.length;
+      total = result.total;
       error = null;
     } catch (e) {
       error = 'Search failed. Please try again.';
@@ -92,12 +142,30 @@ class ProductListViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
 
-  /// Called when the user picks a category chip.
-  void onCategorySelected(String category) {
-    selectedCategory = category;
-    // Category filtering is applied client-side on the currently
-    // loaded products — see README for why this approach was chosen.
+class ProductDetailViewModel extends ChangeNotifier {
+  final ProductService _service = ProductService();
+
+  Product? product;
+  bool isLoading = false;
+  String? error;
+
+  Future<void> fetchProductDetail(int id) async {
+    isLoading = true;
+    error = null;
     notifyListeners();
+
+    try {
+      product = await _service.getProductDetail(id);
+      error = null;
+    } catch (e) {
+      error = 'Failed to load product detail.';
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
+
+  Future<void> retry(int id) => fetchProductDetail(id);
 }
